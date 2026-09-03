@@ -1,0 +1,14 @@
+// Phase 0: datasource + client wiring only, to prove the app can connect
+// to and migrate PostgreSQL. The real data model (stores, products_cache,
+// landing_pages, landing_page_versions, templates, analytics_events, ...)
+// is introduced starting Phase 1 / Phase 3 of the roadmap.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "./generated"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
