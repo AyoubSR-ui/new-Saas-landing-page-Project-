@@ -28,6 +28,13 @@ jobs:
       NODE_ENV: test
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ecommerce_landing_saas_test
       LOG_LEVEL: silent
+      SHOPIFY_API_KEY: ci-test-api-key
+      SHOPIFY_API_SECRET: ci-test-api-secret
+      SHOPIFY_APP_URL: https://ci-app.test.example
+      SHOPIFY_API_VERSION: 2025-01
+      SHOPIFY_SCOPES: read_products
+      # 32 random bytes, base64 — CI-only fixture, never used outside this workflow.
+      TOKEN_ENCRYPTION_KEY: R8acOX5NehwX4gzHvkP8DUoBkPop0qyDCkLrCrbEISI=
 
     steps:
       - uses: actions/checkout@v4
@@ -40,6 +47,11 @@ jobs:
       - run: npm ci
 
       - run: npm run lint
+
+      - name: Generate Prisma client and apply migrations
+        run: |
+          npm run prisma:generate --workspace=server
+          npx --workspace=server prisma migrate deploy
 
       - run: npm run typecheck
 

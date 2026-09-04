@@ -3,6 +3,9 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  // Read .env from the monorepo root (not client/), so one .env file at
+  // the repo root — same one the server reads — supplies VITE_* vars too.
+  envDir: "../",
   server: {
     port: 5173,
     proxy: {

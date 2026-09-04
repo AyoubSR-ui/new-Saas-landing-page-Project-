@@ -1,7 +1,7 @@
-// Phase 0: datasource + client wiring only, to prove the app can connect
-// to and migrate PostgreSQL. The real data model (stores, products_cache,
-// landing_pages, landing_page_versions, templates, analytics_events, ...)
-// is introduced starting Phase 1 / Phase 3 of the roadmap.
+// Phase 1: first real models — Shopify shop installation and OAuth CSRF
+// state. The rest of the data model (products_cache, landing_pages,
+// landing_page_versions, templates, analytics_events, ...) is introduced
+// starting Phase 2/3 of the roadmap.
 
 generator client {
   provider = "prisma-client-js"
@@ -11,4 +11,44 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+enum ShopStatus {
+  INSTALLED
+  UNINSTALLED
+}
+
+// One row per Shopify shop that has ever installed the app. Rows are never
+// deleted on uninstall (auditability / future data-retention decisions) —
+// uninstall instead flips `status`, stamps `uninstalledAt`, and nulls out
+// `accessTokenCiphertext` so the offline token can no longer be used even
+// if application-level status checks were ever bypassed.
+model Shop {
+  id                    String     @id @default(uuid())
+  shopDomain            String     @unique
+  // AES-256-GCM ciphertext blob (see server/src/modules/shopify/security/tokenCipher.ts).
+  // Null once uninstalled, or before the OAuth callback has ever completed.
+  accessTokenCiphertext String?
+  // Space-separated scopes actually granted by Shopify for the current token.
+  scopes                String?
+  status                ShopStatus @default(INSTALLED)
+  installedAt           DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+  uninstalledAt         DateTime?
+
+  @@index([status])
+}
+
+// Short-lived, single-use OAuth CSRF state. A row is created when the
+// install flow redirects to Shopify and deleted the moment it is consumed
+// (successfully or not) by the callback, so a state value can never be
+// replayed.
+model OAuthState {
+  id         String   @id @default(uuid())
+  state      String   @unique
+  shopDomain String
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+
+  @@index([expiresAt])
 }

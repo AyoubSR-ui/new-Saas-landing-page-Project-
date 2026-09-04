@@ -4,6 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>E-Commerce Landing Page SaaS</title>
+    <!-- Public client ID, not a secret. Required by the App Bridge script below
+         so it can auto-initialize when the app is loaded inside Shopify admin. -->
+    <meta name="shopify-api-key" content="%VITE_SHOPIFY_API_KEY%" />
+    <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
   </head>
   <body>
     <div id="root"></div>
