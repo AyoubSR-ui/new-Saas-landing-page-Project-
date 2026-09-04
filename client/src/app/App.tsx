@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { fetchWithSessionToken } from "../lib/api";
 import { getShopifyGlobal, isEmbedded } from "../lib/shopify";
 import { ProductsPanel } from "./ProductsPanel";
+import { LandingPagesPanel } from "./LandingPagesPanel";
 
 type Status =
   | { phase: "checking" }
@@ -78,6 +79,7 @@ export function App(): JSX.Element {
         <>
           <p>Installation successful — connected to {status.shop}.</p>
           <ProductsPanel />
+          <LandingPagesPanel />
         </>
       )}
       {status.phase === "error" && <p role="alert">Something went wrong: {status.message}</p>}

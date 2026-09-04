@@ -1,8 +1,8 @@
 // Phase 1: first real models — Shopify shop installation and OAuth CSRF
 // state. Phase 2 adds the product data foundation (Product, Variant,
-// ProductImage). The rest of the data model (landing_pages,
-// landing_page_versions, templates, analytics_events, ...) is introduced
-// starting Phase 3 of the roadmap.
+// ProductImage). Phase 3 adds the landing-page domain foundation
+// (LandingPage, LandingPageProduct). The rest of the data model (templates,
+// analytics_events, ...) is introduced starting Phase 4+ of the roadmap.
 
 generator client {
   provider = "prisma-client-js"
@@ -37,7 +37,8 @@ model Shop {
   updatedAt             DateTime   @updatedAt
   uninstalledAt         DateTime?
 
-  products Product[]
+  products     Product[]
+  landingPages LandingPage[]
 
   @@index([status])
 }
@@ -69,8 +70,9 @@ model Product {
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
-  variants Variant[]
-  images   ProductImage[]
+  variants         Variant[]
+  images           ProductImage[]
+  landingPageLinks LandingPageProduct[]
 
   @@unique([shopId, shopifyProductId])
   @@index([shopId])
@@ -139,4 +141,58 @@ model OAuthState {
   expiresAt  DateTime
 
   @@index([expiresAt])
+}
+
+enum LandingPageStatus {
+  DRAFT
+  PUBLISHED
+}
+
+// Phase 3: app-owned landing page domain/draft model. Tenant-scoped exactly
+// like Product — shopId is the sole trust boundary, never a client-supplied
+// value. `config` is a versioned, Shopify-agnostic JSON document (see
+// shared/src/schemas/landingPage.schema.ts) deliberately decoupled from any
+// Shopify API payload shape, so a future visual-editor/AI-generation phase
+// can evolve section shapes without a schema migration. `deletedAt` mirrors
+// the Shop/Product soft-delete pattern already established in Phases 1-2.
+// `status` only records the domain state (draft vs. publishable) — no
+// publishing/storefront-deployment behavior is wired to it in this phase.
+model LandingPage {
+  id        String            @id @default(uuid())
+  shopId    String
+  shop      Shop              @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  title     String
+  slug      String
+  status    LandingPageStatus @default(DRAFT)
+  config    Json
+  deletedAt DateTime?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  productLinks LandingPageProduct[]
+
+  @@unique([shopId, slug])
+  @@index([shopId])
+  @@index([shopId, deletedAt])
+}
+
+// Join table associating a landing page with a Phase 2 product. Tenant
+// safety (a page may only reference products from its own shop) cannot be
+// expressed as a schema-level constraint — Prisma has no way to declare
+// "productId.shopId must equal landingPageId.shopId" — so it is enforced at
+// the service layer (landingPageService.ts), which resolves every
+// productId through Phase 2's shop-scoped product repository before an
+// association is ever persisted.
+model LandingPageProduct {
+  id            String      @id @default(uuid())
+  landingPageId String
+  landingPage   LandingPage @relation(fields: [landingPageId], references: [id], onDelete: Cascade)
+  productId     String
+  product       Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  position      Int
+  createdAt     DateTime    @default(now())
+
+  @@unique([landingPageId, productId])
+  @@index([landingPageId])
+  @@index([productId])
 }
