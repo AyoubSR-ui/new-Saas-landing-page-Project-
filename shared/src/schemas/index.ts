@@ -1,4 +1,5 @@
 export * from "./health.schema.js";
+export * from "./product.schema.js";
 
 // Populated in later phases:
 //   ./page     -> PageSchema, ThemeSchema           (Phase 3)

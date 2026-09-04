@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchWithSessionToken } from "../lib/api";
 import { getShopifyGlobal, isEmbedded } from "../lib/shopify";
+import { ProductsPanel } from "./ProductsPanel";
 
 type Status =
   | { phase: "checking" }
@@ -73,7 +74,12 @@ export function App(): JSX.Element {
         <p>Open this app from your Shopify admin to continue.</p>
       )}
       {status.phase === "loading" && <p>Connecting to Shopify…</p>}
-      {status.phase === "success" && <p>Installation successful — connected to {status.shop}.</p>}
+      {status.phase === "success" && (
+        <>
+          <p>Installation successful — connected to {status.shop}.</p>
+          <ProductsPanel />
+        </>
+      )}
       {status.phase === "error" && <p role="alert">Something went wrong: {status.message}</p>}
     </main>
   );

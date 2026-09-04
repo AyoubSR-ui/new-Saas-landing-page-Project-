@@ -20,9 +20,20 @@ handling should happen anywhere outside this module.
   exchange, session-token verification, `requireShopAuth` middleware.
 - `security/tokenCipher.ts` — AES-256-GCM encryption for offline access tokens at rest.
 - `db/shopRepository.ts` — the only code allowed to read/write the `Shop` Prisma model.
-- `client/shopifyClient.ts` — minimal authenticated Admin API request helper. No
-  product/business-domain calls yet — those land in Phase 2 (`products/`) and Phase 9
-  (`checkout/`).
-- `webhooks/` — raw-body HMAC verification + the `app/uninstalled` handler.
+- `client/shopifyClient.ts` — minimal authenticated Admin API request helper, reused
+  as-is (including for GraphQL — see `products/shopifyProductAdapter.ts`) by every
+  later phase's Shopify calls. No mutation calls exist yet; Phase 2 is read-only with
+  respect to Shopify data.
+- `products/` (Phase 2) — the product data foundation. `types.ts` defines the
+  application-owned normalized shape; `shopifyProductAdapter.ts` (GraphQL sync) and
+  `webhookProductAdapter.ts` (REST webhook payloads) both convert Shopify's shapes into
+  it; `productRepository.ts` is the only code allowed to touch the `Product`/`Variant`/
+  `ProductImage` Prisma models; `productSync.ts` orchestrates a full catalog sync;
+  `productContracts.ts` maps persisted rows to the shared API response schemas;
+  `routes.ts` exposes the authenticated, shop-scoped read/sync endpoints (mounted at
+  `/api/products`, not under `/api/shopify`).
+- `webhooks/` — raw-body HMAC verification, the `app/uninstalled` handler, and (Phase 2)
+  `products.ts` (`products/create|update|delete`) built on the shared
+  `webhookRequest.ts` verify-and-parse helper.
 
-`products/` and `checkout/` remain empty until Phase 2 and Phase 9 respectively.
+`checkout/` remains empty until Phase 9.
