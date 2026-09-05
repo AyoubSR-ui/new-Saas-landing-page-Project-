@@ -20,6 +20,7 @@ vi.mock("../db/shopRepository.js", () => ({
 }));
 
 const { requireShopAuth } = await import("./requireShopAuth.js");
+const { findShopByDomain } = await import("../db/shopRepository.js");
 
 function signToken(shop: string, overrides: Record<string, unknown> = {}): string {
   const now = Math.floor(Date.now() / 1000);
@@ -118,5 +119,19 @@ describe("requireShopAuth", () => {
 
     expect(next).toHaveBeenCalledWith();
     expect(req.shop?.shopDomain).toBe(INSTALLED_SHOP);
+  });
+
+  it("forwards a database failure from findShopByDomain to next(err) instead of throwing/hanging", async () => {
+    const dbError = new Error("Can't reach database server at `localhost:5432`");
+    vi.mocked(findShopByDomain).mockRejectedValueOnce(dbError);
+
+    const token = signToken(INSTALLED_SHOP);
+    const req = makeReq(`Bearer ${token}`);
+
+    await expect(requireShopAuth(req, {} as Response, next)).resolves.toBeUndefined();
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(next).toHaveBeenCalledWith(dbError);
+    expect(req.shop).toBeUndefined();
   });
 });

@@ -45,7 +45,13 @@ export async function requireShopAuth(
     return;
   }
 
-  const shop = await findShopByDomain(shopDomain);
+  let shop: Awaited<ReturnType<typeof findShopByDomain>>;
+  try {
+    shop = await findShopByDomain(shopDomain);
+  } catch (err) {
+    next(err);
+    return;
+  }
 
   if (!shop || shop.status !== "INSTALLED") {
     next(new ForbiddenError("Shop is not installed"));
