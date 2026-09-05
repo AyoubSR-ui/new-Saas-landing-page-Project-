@@ -1,4 +1,5 @@
-import { PageRenderer } from "./renderer/PageRenderer";
+import type { PageSection } from "@ecommerce-landing-saas/shared";
+import { PageRenderer, paddingToCss } from "./renderer/PageRenderer";
 import { PropertiesPanel } from "./PropertiesPanel";
 import { SectionList } from "./SectionList";
 import { useLandingPageEditor } from "./useLandingPageEditor";
@@ -61,11 +62,26 @@ export function LandingPageEditor({ pageId, onClose }: LandingPageEditorProps): 
         </div>
 
         <div style={{ flex: "2 1 320px", minWidth: "260px", border: "1px solid #ddd", overflowX: "auto" }}>
+          {/* Selection/click affordances are an editor-only wrapper around
+              the canonical rendered section — PageRenderer itself has no
+              concept of "selected" or "clickable". Same component the
+              standalone preview uses, with zero editor coupling there. */}
           <PageRenderer
             document={state.document}
             productsById={editor.productsById}
-            selectedSectionId={state.selectedSectionId}
-            onSelectSection={editor.selectSection}
+            renderSectionContainer={(section: PageSection, content) => (
+              <div
+                onClick={() => editor.selectSection(section.id)}
+                style={{
+                  padding: paddingToCss(section.settings.padding),
+                  backgroundColor: section.settings.backgroundColor,
+                  outline: section.id === state.selectedSectionId ? "2px solid #2563eb" : "1px solid transparent",
+                  cursor: "pointer",
+                }}
+              >
+                {content}
+              </div>
+            )}
           />
         </div>
 

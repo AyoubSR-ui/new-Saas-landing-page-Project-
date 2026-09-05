@@ -1,29 +1,7 @@
 import type { PageDocument, PageSection, ProductSummary } from "@ecommerce-landing-saas/shared";
-import { HeroSection, ImageSection, ProductShowcaseSection, TextSection } from "./sections";
+import { SectionRenderer } from "./SectionRenderer";
 
-interface SectionRendererProps {
-  section: PageSection;
-  productsById: Record<string, ProductSummary>;
-}
-
-// Dispatch by section type through a static lookup table — never by
-// evaluating a type string as a component name or executing anything from
-// the document itself. An entry not present here (a future/unknown type)
-// falls through to UnknownSection rather than throwing.
-const SECTION_RENDERERS: Record<PageSection["type"], (props: SectionRendererProps) => JSX.Element> = {
-  hero: ({ section }) => <HeroSection section={section as Extract<PageSection, { type: "hero" }>} />,
-  text: ({ section }) => <TextSection section={section as Extract<PageSection, { type: "text" }>} />,
-  image: ({ section }) => <ImageSection section={section as Extract<PageSection, { type: "image" }>} />,
-  product_showcase: ({ section, productsById }) => (
-    <ProductShowcaseSection section={section as Extract<PageSection, { type: "product_showcase" }>} productsById={productsById} />
-  ),
-};
-
-function UnknownSection({ type }: { type: string }): JSX.Element {
-  return <div role="alert">Unsupported section type: {type}</div>;
-}
-
-function paddingToCss(padding: PageSection["settings"]["padding"]): string {
+export function paddingToCss(padding: PageSection["settings"]["padding"]): string {
   switch (padding) {
     case "none":
       return "0";
@@ -36,38 +14,48 @@ function paddingToCss(padding: PageSection["settings"]["padding"]): string {
   }
 }
 
+/** The default section container: production styling only (padding/background from the section's own `settings`) — zero editor affordances. */
+function defaultSectionContainer(section: PageSection, content: JSX.Element): JSX.Element {
+  return <div style={{ padding: paddingToCss(section.settings.padding), backgroundColor: section.settings.backgroundColor }}>{content}</div>;
+}
+
+function EmptyPageState(): JSX.Element {
+  return <p>This page has no sections yet.</p>;
+}
+
 export interface PageRendererProps {
   document: PageDocument;
   productsById: Record<string, ProductSummary>;
-  selectedSectionId?: string | null;
-  onSelectSection?: (id: string) => void;
+  /**
+   * Optional per-section wrapper, injected by a caller that needs to add
+   * editor-only affordances (selection outline, click-to-select) around a
+   * canonically-rendered section — WITHOUT PageRenderer itself knowing
+   * anything about editing. Standalone/production rendering omits this
+   * entirely and gets plain production styling (see defaultSectionContainer).
+   */
+  renderSectionContainer?: (section: PageSection, content: JSX.Element) => JSX.Element;
 }
 
 /**
- * Deterministic: the same document always produces the same rendered
- * structure — section order maps 1:1 to render order, and dispatch is a
- * pure lookup on `section.type`, never dynamic code execution.
+ * The one canonical page-rendering path: PageDocument -> sections[] ->
+ * SectionRenderer -> typed section component. Deterministic — the same
+ * document always produces the same rendered structure, in the same
+ * order. Used identically by the editor's live preview and the standalone
+ * preview surface; the editor is the only caller that supplies
+ * `renderSectionContainer`.
  */
-export function PageRenderer({ document, productsById, selectedSectionId, onSelectSection }: PageRendererProps): JSX.Element {
+export function PageRenderer({ document, productsById, renderSectionContainer = defaultSectionContainer }: PageRendererProps): JSX.Element {
+  if (document.sections.length === 0) {
+    return <EmptyPageState />;
+  }
+
   return (
     <div>
-      {document.sections.map((section) => {
-        const renderSection = SECTION_RENDERERS[section.type];
-        return (
-          <div
-            key={section.id}
-            onClick={onSelectSection ? () => onSelectSection(section.id) : undefined}
-            style={{
-              padding: paddingToCss(section.settings.padding),
-              backgroundColor: section.settings.backgroundColor,
-              outline: section.id === selectedSectionId ? "2px solid #2563eb" : "1px solid transparent",
-              cursor: onSelectSection ? "pointer" : undefined,
-            }}
-          >
-            {renderSection ? renderSection({ section, productsById }) : <UnknownSection type={section.type} />}
-          </div>
-        );
-      })}
+      {document.sections.map((section) => (
+        <div key={section.id}>
+          {renderSectionContainer(section, <SectionRenderer section={section} productsById={productsById} />)}
+        </div>
+      ))}
     </div>
   );
 }

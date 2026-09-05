@@ -4,6 +4,7 @@ import { getShopifyGlobal, isEmbedded } from "../lib/shopify";
 import { ProductsPanel } from "./ProductsPanel";
 import { LandingPagesPanel } from "./LandingPagesPanel";
 import { LandingPageEditor } from "../features/editor/LandingPageEditor";
+import { PagePreviewView } from "./PagePreviewView";
 
 type Status =
   | { phase: "checking" }
@@ -27,6 +28,7 @@ async function waitForAppBridge(): Promise<boolean> {
 export function App(): JSX.Element {
   const [status, setStatus] = useState<Status>({ phase: "checking" });
   const [editingPageId, setEditingPageId] = useState<string | null>(null);
+  const [previewingPageId, setPreviewingPageId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,11 +82,14 @@ export function App(): JSX.Element {
       {status.phase === "success" && editingPageId && (
         <LandingPageEditor pageId={editingPageId} onClose={() => setEditingPageId(null)} />
       )}
-      {status.phase === "success" && !editingPageId && (
+      {status.phase === "success" && !editingPageId && previewingPageId && (
+        <PagePreviewView pageId={previewingPageId} onClose={() => setPreviewingPageId(null)} />
+      )}
+      {status.phase === "success" && !editingPageId && !previewingPageId && (
         <>
           <p>Installation successful — connected to {status.shop}.</p>
           <ProductsPanel />
-          <LandingPagesPanel onEdit={setEditingPageId} />
+          <LandingPagesPanel onEdit={setEditingPageId} onPreview={setPreviewingPageId} />
         </>
       )}
       {status.phase === "error" && <p role="alert">Something went wrong: {status.message}</p>}

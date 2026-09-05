@@ -9,11 +9,13 @@ type State =
 
 interface LandingPagesPanelProps {
   onEdit: (id: string) => void;
+  onPreview: (id: string) => void;
 }
 
 // List/create/delete foundation from Phase 3, extended in Phase 4 with an
-// "Edit" action that opens the section editor (see ../features/editor/).
-export function LandingPagesPanel({ onEdit }: LandingPagesPanelProps): JSX.Element {
+// "Edit" action (section editor) and in Phase 5 with a "Preview" action
+// (standalone canonical-renderer view, see ../PagePreviewView.tsx).
+export function LandingPagesPanel({ onEdit, onPreview }: LandingPagesPanelProps): JSX.Element {
   const [state, setState] = useState<State>({ phase: "loading" });
   const [title, setTitle] = useState("");
   const [creating, setCreating] = useState(false);
@@ -96,6 +98,9 @@ export function LandingPagesPanel({ onEdit }: LandingPagesPanelProps): JSX.Eleme
               <span>· {page.productCount} product{page.productCount === 1 ? "" : "s"}</span>{" "}
               <button type="button" onClick={() => onEdit(page.id)}>
                 Edit
+              </button>{" "}
+              <button type="button" onClick={() => onPreview(page.id)}>
+                Preview
               </button>{" "}
               <button type="button" onClick={() => void handleDelete(page.id)}>
                 Delete

@@ -6,6 +6,6 @@
     "noEmit": true,
     "types": ["vite/client"]
   },
-  "include": ["src"],
+  "include": ["src", "vitest.setup.ts", "vitest.config.ts"],
   "references": [{ "path": "../shared" }]
 }

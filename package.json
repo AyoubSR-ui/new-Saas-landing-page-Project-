@@ -15,7 +15,7 @@
     "build": "npm run build --workspace=shared && npm run build --workspace=server && npm run build --workspace=client",
     "typecheck": "npm run build --workspace=shared && npm run typecheck --workspace=server && npm run typecheck --workspace=client",
     "lint": "eslint .",
-    "test": "npm run test --workspace=shared && npm run test --workspace=server"
+    "test": "npm run test --workspace=shared && npm run test --workspace=server && npm run test --workspace=client"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.15.0",

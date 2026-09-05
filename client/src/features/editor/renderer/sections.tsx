@@ -36,6 +36,18 @@ export function TextSection({ section }: { section: TextSectionType }): JSX.Elem
 
 export function ImageSection({ section }: { section: ImageSectionType }): JSX.Element {
   const { url, altText, linkUrl, alignment } = section.props;
+
+  // The schema requires a non-empty url, but the renderer stays defensive
+  // rather than emitting a broken `<img src="">` if that's ever violated
+  // (e.g. a future schema-version skew).
+  if (!url) {
+    return (
+      <div style={{ textAlign: alignment }}>
+        <em>No image set</em>
+      </div>
+    );
+  }
+
   const image = <img src={url} alt={altText} style={{ maxWidth: "100%", height: "auto" }} />;
   return <div style={{ textAlign: alignment }}>{linkUrl ? <a href={linkUrl}>{image}</a> : image}</div>;
 }
@@ -48,6 +60,16 @@ export function ProductShowcaseSection({
   productsById: Record<string, ProductSummary>;
 }): JSX.Element {
   const { heading, productIds, displayStyle } = section.props;
+
+  if (productIds.length === 0) {
+    return (
+      <div>
+        {heading && <h2>{heading}</h2>}
+        <p>No products selected yet.</p>
+      </div>
+    );
+  }
+
   return (
     <div>
       {heading && <h2>{heading}</h2>}
