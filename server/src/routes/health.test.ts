@@ -42,4 +42,15 @@ describe("GET /health", () => {
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe("NOT_FOUND");
   });
+
+  it("returns a JSON 404 for GET / outside production, without requiring client/dist to exist", async () => {
+    // In dev/test (the default NODE_ENV here), app.ts never registers the
+    // static/SPA-fallback middleware, so this must behave exactly like any
+    // other unmatched route — proving SPA serving imposes no dependency on
+    // a built client outside production.
+    const res = await request(createApp()).get("/");
+
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe("NOT_FOUND");
+  });
 });
