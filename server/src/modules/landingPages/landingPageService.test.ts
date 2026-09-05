@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_LANDING_PAGE_CONFIG } from "@ecommerce-landing-saas/shared";
+import { DEFAULT_PAGE_DOCUMENT } from "@ecommerce-landing-saas/shared";
 import { ConflictError, NotFoundError, ValidationError } from "../../utils/errors.js";
 
 interface MockProduct {
@@ -28,7 +28,13 @@ const repo = vi.hoisted(() => ({
 
 vi.mock("./landingPageRepository.js", () => repo);
 
-const { createLandingPage, deleteLandingPage, getLandingPage, updateLandingPage } = await import("./landingPageService.js");
+const {
+  createLandingPage,
+  deleteLandingPage,
+  getLandingPage,
+  listLandingPages,
+  updateLandingPage,
+} = await import("./landingPageService.js");
 const { Prisma } = await import("../../../prisma/generated/index.js");
 
 const SHOP_A = "shop-a";
@@ -41,12 +47,27 @@ function fakePage(overrides: Record<string, unknown> = {}) {
     title: "Title",
     slug: "title",
     status: "DRAFT",
-    config: DEFAULT_LANDING_PAGE_CONFIG,
+    config: DEFAULT_PAGE_DOCUMENT,
     createdAt: new Date(),
     updatedAt: new Date(),
     deletedAt: null,
     productLinks: [],
     ...overrides,
+  };
+}
+
+function documentWithProductShowcase(productIds: string[]) {
+  return {
+    schemaVersion: 2 as const,
+    sections: [
+      {
+        id: "showcase-1",
+        type: "product_showcase" as const,
+        props: { productIds, displayStyle: "grid" as const },
+        settings: { padding: "medium" as const },
+      },
+    ],
+    metadata: { migrationNotes: [] },
   };
 }
 
@@ -91,6 +112,24 @@ describe("landingPageService", () => {
 
       await expect(createLandingPage(SHOP_A, { title: "Page", slug: "dup" })).rejects.toThrow(ConflictError);
     });
+
+    it("rejects a document whose product_showcase section references a cross-tenant product", async () => {
+      state.products.set("p1", { id: "p1", shopId: SHOP_B });
+
+      await expect(
+        createLandingPage(SHOP_A, { title: "Page", config: documentWithProductShowcase(["p1"]) }),
+      ).rejects.toThrow(ValidationError);
+      expect(repo.createLandingPage).not.toHaveBeenCalled();
+    });
+
+    it("accepts a document whose product_showcase section references a same-tenant product", async () => {
+      state.products.set("p1", { id: "p1", shopId: SHOP_A });
+      repo.createLandingPage.mockResolvedValue(fakePage({ config: documentWithProductShowcase(["p1"]) }));
+
+      await createLandingPage(SHOP_A, { title: "Page", config: documentWithProductShowcase(["p1"]) });
+
+      expect(repo.createLandingPage).toHaveBeenCalled();
+    });
   });
 
   describe("getLandingPage", () => {
@@ -104,6 +143,30 @@ describe("landingPageService", () => {
       repo.findLandingPageByIdForShop.mockResolvedValue(null);
       await expect(getLandingPage(SHOP_A, "page-1")).rejects.toThrow(NotFoundError);
     });
+
+    it("migrates a legacy (v1) stored document to the current schema on read", async () => {
+      repo.findLandingPageByIdForShop.mockResolvedValue(
+        fakePage({ config: { version: 1, sections: [{ id: "t1", type: "text", props: { body: "Old content" } }] } }),
+      );
+
+      const page = await getLandingPage(SHOP_A, "page-1");
+
+      expect(page.config.schemaVersion).toBe(2);
+      expect(page.config.sections[0]).toMatchObject({ type: "text", props: { body: "Old content" } });
+    });
+  });
+
+  describe("listLandingPages", () => {
+    it("normalizes every returned item's document", async () => {
+      repo.findLandingPagesByShop.mockResolvedValue({
+        items: [fakePage({ config: { version: 1, sections: [] } })],
+        nextCursor: null,
+      });
+
+      const { items } = await listLandingPages(SHOP_A, { limit: 20 });
+
+      expect(items[0]?.config.schemaVersion).toBe(2);
+    });
   });
 
   describe("updateLandingPage", () => {
@@ -111,6 +174,15 @@ describe("landingPageService", () => {
       state.products.set("p1", { id: "p1", shopId: SHOP_B });
 
       await expect(updateLandingPage(SHOP_A, "page-1", { productIds: ["p1"] })).rejects.toThrow(ValidationError);
+      expect(repo.updateLandingPage).not.toHaveBeenCalled();
+    });
+
+    it("rejects a document update whose product_showcase section references a cross-tenant product", async () => {
+      state.products.set("p1", { id: "p1", shopId: SHOP_B });
+
+      await expect(
+        updateLandingPage(SHOP_A, "page-1", { config: documentWithProductShowcase(["p1"]) }),
+      ).rejects.toThrow(ValidationError);
       expect(repo.updateLandingPage).not.toHaveBeenCalled();
     });
 

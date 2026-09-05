@@ -1,16 +1,15 @@
 import {
   LandingPageDetailResponseSchema,
   LandingPageListResponseSchema,
-  type LandingPageConfig,
   type LandingPageDetail,
   type LandingPageDetailResponse,
   type LandingPageListResponse,
   type LandingPageProductRef,
   type LandingPageSummary,
 } from "@ecommerce-landing-saas/shared";
-import type { LandingPageWithProducts } from "./landingPageRepository.js";
+import type { LandingPageWithDocument } from "./landingPageService.js";
 
-function toProductRef(link: LandingPageWithProducts["productLinks"][number]): LandingPageProductRef {
+function toProductRef(link: LandingPageWithDocument["productLinks"][number]): LandingPageProductRef {
   const [featuredImage] = link.product.images;
   return {
     id: link.product.id,
@@ -22,7 +21,7 @@ function toProductRef(link: LandingPageWithProducts["productLinks"][number]): La
   };
 }
 
-function toSummary(page: LandingPageWithProducts): LandingPageSummary {
+function toSummary(page: LandingPageWithDocument): LandingPageSummary {
   return {
     id: page.id,
     title: page.title,
@@ -34,21 +33,21 @@ function toSummary(page: LandingPageWithProducts): LandingPageSummary {
   };
 }
 
-function toDetail(page: LandingPageWithProducts): LandingPageDetail {
+function toDetail(page: LandingPageWithDocument): LandingPageDetail {
   return {
     ...toSummary(page),
-    config: page.config as LandingPageConfig,
+    config: page.config,
     products: page.productLinks.map(toProductRef),
   };
 }
 
-export function toLandingPageListResponse(items: LandingPageWithProducts[], nextCursor: string | null): LandingPageListResponse {
+export function toLandingPageListResponse(items: LandingPageWithDocument[], nextCursor: string | null): LandingPageListResponse {
   return LandingPageListResponseSchema.parse({
     items: items.map(toSummary),
     nextCursor,
   });
 }
 
-export function toLandingPageDetailResponse(page: LandingPageWithProducts): LandingPageDetailResponse {
+export function toLandingPageDetailResponse(page: LandingPageWithDocument): LandingPageDetailResponse {
   return LandingPageDetailResponseSchema.parse({ landingPage: toDetail(page) });
 }

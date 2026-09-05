@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_LANDING_PAGE_CONFIG } from "@ecommerce-landing-saas/shared";
+import { DEFAULT_PAGE_DOCUMENT } from "@ecommerce-landing-saas/shared";
 import { toLandingPageDetailResponse, toLandingPageListResponse } from "./landingPageContracts.js";
-import type { LandingPageWithProducts } from "./landingPageRepository.js";
+import type { LandingPageWithDocument } from "./landingPageService.js";
 
-function makePage(overrides: Partial<LandingPageWithProducts> = {}): LandingPageWithProducts {
+function makePage(overrides: Partial<LandingPageWithDocument> = {}): LandingPageWithDocument {
   const now = new Date("2026-01-01T00:00:00.000Z");
   return {
     id: "page-1",
@@ -11,7 +11,7 @@ function makePage(overrides: Partial<LandingPageWithProducts> = {}): LandingPage
     title: "My Page",
     slug: "my-page",
     status: "DRAFT",
-    config: DEFAULT_LANDING_PAGE_CONFIG,
+    config: DEFAULT_PAGE_DOCUMENT,
     deletedAt: null,
     createdAt: now,
     updatedAt: now,
@@ -41,7 +41,7 @@ function makePage(overrides: Partial<LandingPageWithProducts> = {}): LandingPage
       },
     ],
     ...overrides,
-  } as LandingPageWithProducts;
+  } as LandingPageWithDocument;
 }
 
 describe("toLandingPageListResponse", () => {
@@ -60,7 +60,7 @@ describe("toLandingPageListResponse", () => {
 describe("toLandingPageDetailResponse", () => {
   it("includes the full config and product references", () => {
     const response = toLandingPageDetailResponse(makePage());
-    expect(response.landingPage.config).toEqual(DEFAULT_LANDING_PAGE_CONFIG);
+    expect(response.landingPage.config).toEqual(DEFAULT_PAGE_DOCUMENT);
     expect(response.landingPage.products).toHaveLength(1);
     expect(response.landingPage.products[0]).toMatchObject({
       id: "product-1",
@@ -74,5 +74,15 @@ describe("toLandingPageDetailResponse", () => {
     page.productLinks[0]!.product.images = [];
     const response = toLandingPageDetailResponse(page);
     expect(response.landingPage.products[0]?.featuredImage).toBeNull();
+  });
+
+  it("passes a document containing sections through unchanged (contracts.ts does no section-specific mapping)", () => {
+    const documentWithSections = {
+      schemaVersion: 2 as const,
+      sections: [{ id: "h1", type: "hero" as const, props: { headline: "Hi", alignment: "center" as const }, settings: { padding: "medium" as const } }],
+      metadata: { migrationNotes: [] },
+    };
+    const response = toLandingPageDetailResponse(makePage({ config: documentWithSections }));
+    expect(response.landingPage.config).toEqual(documentWithSections);
   });
 });

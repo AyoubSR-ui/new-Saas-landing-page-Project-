@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_LANDING_PAGE_CONFIG } from "@ecommerce-landing-saas/shared";
+import { DEFAULT_PAGE_DOCUMENT } from "@ecommerce-landing-saas/shared";
 import { ConflictError, NotFoundError, ValidationError } from "../../utils/errors.js";
 
 const API_SECRET = "test-api-secret";
@@ -52,7 +52,7 @@ function fakePage(overrides: Record<string, unknown> = {}) {
     title: "Title",
     slug: "title",
     status: "DRAFT",
-    config: DEFAULT_LANDING_PAGE_CONFIG,
+    config: DEFAULT_PAGE_DOCUMENT,
     createdAt: now,
     updatedAt: now,
     deletedAt: null,
@@ -204,6 +204,68 @@ describe("landing page API routes", () => {
 
       expect(res.status).toBe(200);
       expect(service.updateLandingPage).toHaveBeenCalledWith("shop-a", "page-1", expect.objectContaining({ title: "Updated" }));
+    });
+
+    it("saves a valid page document (editor save) and returns it unchanged", async () => {
+      const document = {
+        schemaVersion: 2,
+        sections: [{ id: "hero-1", type: "hero", props: { headline: "Big Sale" }, settings: { padding: "medium" } }],
+        metadata: { migrationNotes: [] },
+      };
+      service.updateLandingPage.mockResolvedValue(fakePage({ config: document }));
+
+      const app = createApp();
+      const res = await request(app)
+        .patch("/api/landing-pages/page-1")
+        .send({ config: document })
+        .set("Authorization", `Bearer ${sessionToken(SHOP_A)}`);
+
+      expect(res.status).toBe(200);
+      expect(service.updateLandingPage).toHaveBeenCalledWith(
+        "shop-a",
+        "page-1",
+        expect.objectContaining({ config: expect.objectContaining({ schemaVersion: 2 }) }),
+      );
+    });
+
+    it("rejects a malformed page document (unknown section type)", async () => {
+      const app = createApp();
+      const res = await request(app)
+        .patch("/api/landing-pages/page-1")
+        .send({ config: { schemaVersion: 2, sections: [{ id: "s1", type: "carousel", props: {} }], metadata: {} } })
+        .set("Authorization", `Bearer ${sessionToken(SHOP_A)}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body).toMatchObject({ error: { code: "VALIDATION_ERROR" } });
+      expect(service.updateLandingPage).not.toHaveBeenCalled();
+    });
+
+    it("rejects a page document with an invalid (old) schema version", async () => {
+      const app = createApp();
+      const res = await request(app)
+        .patch("/api/landing-pages/page-1")
+        .send({ config: { version: 1, sections: [] } })
+        .set("Authorization", `Bearer ${sessionToken(SHOP_A)}`);
+
+      expect(res.status).toBe(400);
+      expect(service.updateLandingPage).not.toHaveBeenCalled();
+    });
+
+    it("surfaces a cross-tenant product reference inside a product_showcase section as a validation error", async () => {
+      service.updateLandingPage.mockRejectedValue(new ValidationError("Product p1 is not a valid product for this shop"));
+      const document = {
+        schemaVersion: 2,
+        sections: [{ id: "ps-1", type: "product_showcase", props: { productIds: ["p1"] }, settings: { padding: "medium" } }],
+        metadata: { migrationNotes: [] },
+      };
+
+      const app = createApp();
+      const res = await request(app)
+        .patch("/api/landing-pages/page-1")
+        .send({ config: document })
+        .set("Authorization", `Bearer ${sessionToken(SHOP_A)}`);
+
+      expect(res.status).toBe(400);
     });
 
     it("returns not-found for a page belonging to another shop", async () => {

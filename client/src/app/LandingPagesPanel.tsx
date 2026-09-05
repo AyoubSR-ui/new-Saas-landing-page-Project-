@@ -7,10 +7,13 @@ type State =
   | { phase: "loaded"; items: LandingPageSummary[] }
   | { phase: "error"; message: string };
 
-// Minimal foundation for Phase 3 — proves the landing-page domain API works
-// end to end (list/create/delete). Not the visual editor: no section
-// editing, drag-and-drop, or preview rendering lives here yet.
-export function LandingPagesPanel(): JSX.Element {
+interface LandingPagesPanelProps {
+  onEdit: (id: string) => void;
+}
+
+// List/create/delete foundation from Phase 3, extended in Phase 4 with an
+// "Edit" action that opens the section editor (see ../features/editor/).
+export function LandingPagesPanel({ onEdit }: LandingPagesPanelProps): JSX.Element {
   const [state, setState] = useState<State>({ phase: "loading" });
   const [title, setTitle] = useState("");
   const [creating, setCreating] = useState(false);
@@ -91,6 +94,9 @@ export function LandingPagesPanel(): JSX.Element {
             <li key={page.id}>
               <strong>{page.title}</strong> <span>({page.status.toLowerCase()})</span>{" "}
               <span>· {page.productCount} product{page.productCount === 1 ? "" : "s"}</span>{" "}
+              <button type="button" onClick={() => onEdit(page.id)}>
+                Edit
+              </button>{" "}
               <button type="button" onClick={() => void handleDelete(page.id)}>
                 Delete
               </button>

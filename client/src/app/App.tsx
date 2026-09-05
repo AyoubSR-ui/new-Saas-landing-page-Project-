@@ -3,6 +3,7 @@ import { fetchWithSessionToken } from "../lib/api";
 import { getShopifyGlobal, isEmbedded } from "../lib/shopify";
 import { ProductsPanel } from "./ProductsPanel";
 import { LandingPagesPanel } from "./LandingPagesPanel";
+import { LandingPageEditor } from "../features/editor/LandingPageEditor";
 
 type Status =
   | { phase: "checking" }
@@ -25,6 +26,7 @@ async function waitForAppBridge(): Promise<boolean> {
 
 export function App(): JSX.Element {
   const [status, setStatus] = useState<Status>({ phase: "checking" });
+  const [editingPageId, setEditingPageId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,11 +77,14 @@ export function App(): JSX.Element {
         <p>Open this app from your Shopify admin to continue.</p>
       )}
       {status.phase === "loading" && <p>Connecting to Shopify…</p>}
-      {status.phase === "success" && (
+      {status.phase === "success" && editingPageId && (
+        <LandingPageEditor pageId={editingPageId} onClose={() => setEditingPageId(null)} />
+      )}
+      {status.phase === "success" && !editingPageId && (
         <>
           <p>Installation successful — connected to {status.shop}.</p>
           <ProductsPanel />
-          <LandingPagesPanel />
+          <LandingPagesPanel onEdit={setEditingPageId} />
         </>
       )}
       {status.phase === "error" && <p role="alert">Something went wrong: {status.message}</p>}

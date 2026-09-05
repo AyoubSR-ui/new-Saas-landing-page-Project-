@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_LANDING_PAGE_CONFIG } from "@ecommerce-landing-saas/shared";
+import { DEFAULT_PAGE_DOCUMENT } from "@ecommerce-landing-saas/shared";
 import { prisma } from "../../db/prisma.js";
 import { Prisma } from "../../../prisma/generated/index.js";
 import { encryptToken } from "../shopify/security/tokenCipher.js";
@@ -15,7 +15,7 @@ import {
 // type (its `props: Record<string, unknown>` isn't assignable to InputJsonObject) —
 // the repository/service layers cast at the boundary for the same reason; this test
 // data does the same.
-const config = DEFAULT_LANDING_PAGE_CONFIG as unknown as Prisma.InputJsonValue;
+const config = DEFAULT_PAGE_DOCUMENT as unknown as Prisma.InputJsonValue;
 
 // Real-database verification (no mocks) for the Phase 3 landing-page data
 // layer, mirroring the Phase 1/2 self-skip pattern: this suite only runs
@@ -70,7 +70,7 @@ describe.runIf(dbAvailable)("landingPageRepository (real database)", () => {
 
     expect(page.title).toBe("My Page");
     expect(page.status).toBe("DRAFT");
-    expect(page.config).toEqual(DEFAULT_LANDING_PAGE_CONFIG);
+    expect(page.config).toEqual(DEFAULT_PAGE_DOCUMENT);
     expect(page.productLinks).toEqual([]);
   });
 
