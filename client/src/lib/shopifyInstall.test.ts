@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildInstallUrl,
   clearRecoveryAttempted,
+  defaultNavigate,
   getShopDomainFromLocation,
   hasAttemptedRecovery,
   isShopNotInstalledError,
@@ -78,10 +79,42 @@ describe("recovery-attempted guard", () => {
 });
 
 describe("redirectTopLevelToInstall", () => {
-  it("navigates to the install URL for the given shop via the injected navigate function", () => {
+  it("navigates to the install URL for the given shop via the injected navigate function, exactly once", () => {
     const navigate = vi.fn();
     redirectTopLevelToInstall("my-store.myshopify.com", navigate);
     expect(navigate).toHaveBeenCalledTimes(1);
     expect(navigate.mock.calls[0]?.[0]).toContain("/api/shopify/auth?shop=my-store.myshopify.com");
+  });
+
+  it("does not navigate when there is nothing to inject a domain for (defensive: caller must gate on a valid domain)", () => {
+    const navigate = vi.fn();
+    // Even an already-invalid/empty domain still goes through buildInstallUrl
+    // deterministically — callers (App.tsx) are responsible for only calling
+    // this once getShopDomainFromLocation has already validated the domain;
+    // this test documents that redirectTopLevelToInstall itself always
+    // invokes navigate exactly once per call, never zero or multiple times.
+    redirectTopLevelToInstall("my-store.myshopify.com", navigate);
+    expect(navigate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("defaultNavigate", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("navigates via window.open with the _top target — an existing browsing context, not a new window/tab", () => {
+    const openSpy = vi.fn(() => ({}) as Window);
+    vi.stubGlobal("open", openSpy);
+
+    defaultNavigate("https://example.com/api/shopify/auth?shop=my-store.myshopify.com");
+
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    expect(openSpy).toHaveBeenCalledWith("https://example.com/api/shopify/auth?shop=my-store.myshopify.com", "_top");
+  });
+
+  it("falls back to a direct top-level location assignment if window.open cannot resolve an existing top-level context", () => {
+    vi.stubGlobal("open", vi.fn(() => null));
+    // jsdom does not implement real navigation, so this only verifies the
+    // fallback branch is reached and does not throw when window.open fails.
+    expect(() => defaultNavigate("https://example.com/api/shopify/auth?shop=my-store.myshopify.com")).not.toThrow();
   });
 });

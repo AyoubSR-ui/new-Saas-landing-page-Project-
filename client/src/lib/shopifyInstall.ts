@@ -71,17 +71,41 @@ export function clearRecoveryAttempted(): void {
 }
 
 /**
- * Performs the actual navigation. Targets the top-level browser window
- * (never the embedded iframe) because Shopify's OAuth consent page cannot
- * and must not load inside the app's iframe — this is standard for
- * Shopify embedded-app OAuth regardless of App Bridge version, and does
- * not require any App Bridge API: cross-origin scripts are permitted to
- * *write* `top.location`, even though they cannot read it.
+ * Performs the actual navigation, delegating to an injectable `navigate`
+ * function (defaulting to `defaultNavigate`) so callers/tests can observe
+ * or replace how the top-level redirect happens without touching the
+ * shop-domain validation/encoding above.
  */
 export function redirectTopLevelToInstall(shopDomain: string, navigate: (url: string) => void = defaultNavigate): void {
   navigate(buildInstallUrl(shopDomain));
 }
 
-function defaultNavigate(url: string): void {
-  (window.top ?? window).location.href = url;
+/**
+ * Navigates the topmost browsing context out of the embedded Shopify
+ * Admin iframe — Shopify's OAuth consent page cannot and must not load
+ * inside the app's iframe.
+ *
+ * Uses `window.open(url, "_top")` — the browser's standard named-target
+ * resolution (the same mechanism `<a target="_top">` relies on) — rather
+ * than writing to the cross-origin `window.top.location` property
+ * directly. `_top` always resolves to an *existing* browsing context, so
+ * this is not treated as opening a popup (no window/tab is created, and
+ * popup blockers do not apply). This matters because a direct
+ * `window.top.location.href = url` assignment, made asynchronously (after
+ * awaiting App Bridge's `idToken()` and a `fetch()`, with no fresh
+ * user-activation signal left over) is exactly the pattern modern
+ * Chromium browsers' anti-framebusting intervention can silently drop —
+ * the assignment executes with no thrown error, but no navigation ever
+ * reaches the network. `window.open(..., "_top")` is not subject to that
+ * same interception and is the mechanism Shopify's own guidance documents
+ * for escaping the iframe when App Bridge itself does not intercept a
+ * plain top-level navigation.
+ */
+export function defaultNavigate(url: string): void {
+  const target = window.open(url, "_top");
+  if (!target) {
+    // Defensive fallback only — `_top` targeting an existing ancestor
+    // frame should not be reachable here in a real embedded-app context.
+    (window.top ?? window).location.href = url;
+  }
 }
