@@ -1,6 +1,15 @@
 import { useEffect, useState } from "react";
 import { fetchWithSessionToken } from "../lib/api";
 import { getShopifyGlobal, isEmbedded } from "../lib/shopify";
+import {
+  clearRecoveryAttempted,
+  getShopDomainFromLocation,
+  hasAttemptedRecovery,
+  isShopNotInstalledError,
+  markRecoveryAttempted,
+  redirectTopLevelToInstall,
+  type SessionErrorBody,
+} from "../lib/shopifyInstall";
 import { ProductsPanel } from "./ProductsPanel";
 import { LandingPagesPanel } from "./LandingPagesPanel";
 import { LandingPageEditor } from "../features/editor/LandingPageEditor";
@@ -53,11 +62,28 @@ export function App(): JSX.Element {
         if (cancelled) return;
 
         if (!res.ok) {
-          const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+          const body = (await res.json().catch(() => null)) as SessionErrorBody | null;
+
+          // Only the server's specific "shop is not installed" response
+          // triggers OAuth recovery — never a generic 401/500/502/503,
+          // network failure, or malformed body (see isShopNotInstalledError).
+          // The session-storage guard caps this to one automatic attempt per
+          // tab, so a persistent failure degrades to the error message below
+          // instead of looping.
+          if (isShopNotInstalledError(res.status, body) && !hasAttemptedRecovery()) {
+            const shopDomain = getShopDomainFromLocation();
+            if (shopDomain) {
+              markRecoveryAttempted();
+              redirectTopLevelToInstall(shopDomain);
+              return;
+            }
+          }
+
           setStatus({ phase: "error", message: body?.error?.message ?? `Request failed (${res.status})` });
           return;
         }
 
+        clearRecoveryAttempted();
         const data = (await res.json()) as { shop?: string };
         setStatus({ phase: "success", shop: data.shop ?? "unknown shop" });
       } catch {
