@@ -68,6 +68,10 @@ vi.mock("./productSync.js", () => ({
 }));
 
 const { createApp } = await import("../../../app.js");
+const { syncShopProducts } = await import("./productSync.js");
+const { ShopifyApiError, ShopNotInstalledError } = await import("../client/shopifyClient.js");
+const { ShopifyProductAdapterError } = await import("./shopifyProductAdapter.js");
+const { TokenDecryptionError } = await import("../security/tokenCipher.js");
 
 function sessionToken(shop: string): string {
   const now = Math.floor(Date.now() / 1000);
@@ -228,6 +232,82 @@ describe("product API routes", () => {
         .set("Authorization", `Bearer ${sessionToken(UNINSTALLED_SHOP)}`);
       expect(res.status).toBe(403);
       expect(db.syncCalls).toEqual([]);
+    });
+
+    // These map the sync pipeline's own error types to real HTTP status
+    // codes/messages instead of the generic 500 errorHandler previously gave
+    // for all of them (none extended AppError). Regression coverage for the
+    // production incident where a missing OAuth scope surfaced only as an
+    // opaque "Internal server error".
+    describe("error mapping", () => {
+      it("maps ShopNotInstalledError to 403 SHOP_NOT_INSTALLED", async () => {
+        vi.mocked(syncShopProducts).mockRejectedValueOnce(new ShopNotInstalledError(SHOP_A));
+
+        const app = createApp();
+        const res = await request(app)
+          .post("/api/products/sync")
+          .set("Authorization", `Bearer ${sessionToken(SHOP_A)}`);
+
+        expect(res.status).toBe(403);
+        expect(res.body).toMatchObject({ error: { code: "SHOP_NOT_INSTALLED" } });
+      });
+
+      it("maps a Shopify API/GraphQL failure to 502 SHOPIFY_API_ERROR carrying the real message", async () => {
+        vi.mocked(syncShopProducts).mockRejectedValueOnce(
+          new ShopifyApiError(
+            "Shopify GraphQL product query returned errors: Access denied for products field.",
+            200,
+          ),
+        );
+
+        const app = createApp();
+        const res = await request(app)
+          .post("/api/products/sync")
+          .set("Authorization", `Bearer ${sessionToken(SHOP_A)}`);
+
+        expect(res.status).toBe(502);
+        expect(res.body.error.code).toBe("SHOPIFY_API_ERROR");
+        expect(res.body.error.message).toContain("Access denied for products field");
+      });
+
+      it("maps an unexpected Shopify response shape to 502 SHOPIFY_SYNC_ERROR", async () => {
+        vi.mocked(syncShopProducts).mockRejectedValueOnce(
+          new ShopifyProductAdapterError("Shopify product response is missing required fields"),
+        );
+
+        const app = createApp();
+        const res = await request(app)
+          .post("/api/products/sync")
+          .set("Authorization", `Bearer ${sessionToken(SHOP_A)}`);
+
+        expect(res.status).toBe(502);
+        expect(res.body.error.code).toBe("SHOPIFY_SYNC_ERROR");
+      });
+
+      it("maps a token decryption failure to 500 TOKEN_DECRYPTION_ERROR without leaking ciphertext", async () => {
+        vi.mocked(syncShopProducts).mockRejectedValueOnce(new TokenDecryptionError());
+
+        const app = createApp();
+        const res = await request(app)
+          .post("/api/products/sync")
+          .set("Authorization", `Bearer ${sessionToken(SHOP_A)}`);
+
+        expect(res.status).toBe(500);
+        expect(res.body.error.code).toBe("TOKEN_DECRYPTION_ERROR");
+        expect(JSON.stringify(res.body)).not.toMatch(/v1\./);
+      });
+
+      it("still falls back to a generic 500 for a truly unrecognized error", async () => {
+        vi.mocked(syncShopProducts).mockRejectedValueOnce(new Error("boom"));
+
+        const app = createApp();
+        const res = await request(app)
+          .post("/api/products/sync")
+          .set("Authorization", `Bearer ${sessionToken(SHOP_A)}`);
+
+        expect(res.status).toBe(500);
+        expect(res.body.error.code).toBe("INTERNAL_ERROR");
+      });
     });
   });
 });

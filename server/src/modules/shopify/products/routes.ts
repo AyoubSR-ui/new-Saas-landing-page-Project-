@@ -1,10 +1,13 @@
 import { Router } from "express";
 import { z } from "zod";
-import { NotFoundError, ValidationError } from "../../../utils/errors.js";
+import { AppError, NotFoundError, ValidationError } from "../../../utils/errors.js";
 import { requireShopAuth } from "../auth/requireShopAuth.js";
+import { ShopifyApiError, ShopNotInstalledError } from "../client/shopifyClient.js";
+import { TokenDecryptionError } from "../security/tokenCipher.js";
 import { findProductByIdForShop, findProductsByShop } from "./productRepository.js";
 import { toProductDetailResponse, toProductListResponse, toProductSyncResponse } from "./productContracts.js";
 import { syncShopProducts } from "./productSync.js";
+import { ShopifyProductAdapterError } from "./shopifyProductAdapter.js";
 
 export const productsRouter = Router();
 
@@ -54,6 +57,32 @@ productsRouter.get("/:id", async (req, res, next) => {
   }
 });
 
+/**
+ * The sync pipeline's own error types (ShopNotInstalledError, ShopifyApiError,
+ * ShopifyProductAdapterError, TokenDecryptionError) never extended AppError,
+ * so errorHandler's production branch collapsed every one of them — a missing
+ * OAuth scope, a malformed Shopify response, a corrupted token — into the
+ * same opaque "Internal server error". Mapping them here surfaces the real
+ * cause without changing the sync logic itself. Messages passed through are
+ * already secret-free (see ShopifyApiError/ShopifyProductAdapterError call
+ * sites) — never the token or ciphertext.
+ */
+function toProductSyncError(err: unknown): unknown {
+  if (err instanceof ShopNotInstalledError) {
+    return new AppError(err.message, 403, "SHOP_NOT_INSTALLED");
+  }
+  if (err instanceof ShopifyApiError) {
+    return new AppError(`Shopify rejected the product sync request: ${err.message}`, 502, "SHOPIFY_API_ERROR");
+  }
+  if (err instanceof ShopifyProductAdapterError) {
+    return new AppError(`Shopify product sync failed: ${err.message}`, 502, "SHOPIFY_SYNC_ERROR");
+  }
+  if (err instanceof TokenDecryptionError) {
+    return new AppError("Stored Shopify access token could not be decrypted", 500, "TOKEN_DECRYPTION_ERROR");
+  }
+  return err;
+}
+
 // POST /api/products/sync — triggers a sync for the authenticated shop only;
 // there is no way to pass a target shop, by design.
 productsRouter.post("/sync", async (req, res, next) => {
@@ -61,6 +90,6 @@ productsRouter.post("/sync", async (req, res, next) => {
     const result = await syncShopProducts({ id: req.shop!.id, shopDomain: req.shop!.shopDomain });
     res.status(200).json(toProductSyncResponse(result));
   } catch (err) {
-    next(err);
+    next(toProductSyncError(err));
   }
 });
